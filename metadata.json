@@ -1,0 +1,6 @@
+{
+  "name": "FlashMaster Pro - AI Flashcard Studio",
+  "description": "Profesjonell flashcard-plattform med støtte for Excel, Word, PDF, tilpassede kortdesign, AI-illustrasjoner, repetisjonsstatistikk og eksport til Anki og Quizlet.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
