@@ -12,6 +12,65 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const VIPPS_API_BASE = process.env.VIPPS_API_BASE || 'https://api.vipps.no';
+const VIPPS_CLIENT_ID = process.env.VIPPS_CLIENT_ID;
+const VIPPS_CLIENT_SECRET = process.env.VIPPS_CLIENT_SECRET;
+const VIPPS_SUBSCRIPTION_KEY = process.env.VIPPS_SUBSCRIPTION_KEY;
+const VIPPS_MSN = process.env.VIPPS_MSN;
+const APP_URL = process.env.APP_URL || 'https://flashmaster-pro-sxg7.onrender.com';
+const PRO_PRICE_NOK = 79900;
+const ENTITLEMENT_SECRET = process.env.ENTITLEMENT_SECRET || process.env.AUTH_SESSION_SECRET;
+
+function hasVippsConfig() {
+  return Boolean(VIPPS_CLIENT_ID && VIPPS_CLIENT_SECRET && VIPPS_SUBSCRIPTION_KEY && VIPPS_MSN && ENTITLEMENT_SECRET);
+}
+function signValue(value: string) {
+  const crypto = require('node:crypto');
+  return crypto.createHmac('sha256', ENTITLEMENT_SECRET!).update(value).digest('base64url');
+}
+function signedEntitlement(reference: string) {
+  return `vipps:${reference}.${signValue(`vipps:${reference}`)}`;
+}
+function verifyEntitlement(value?: string) {
+  if (!value || !value.startsWith('vipps:')) return null;
+  const dot = value.lastIndexOf('.');
+  if (dot < 0) return null;
+  const payload = value.slice(0, dot);
+  const signature = value.slice(dot + 1);
+  const expected = signValue(payload);
+  const crypto = require('node:crypto');
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  return payload.slice('vipps:'.length);
+}
+async function vippsAccessToken() {
+  if (!hasVippsConfig()) throw new Error('Vipps production credentials are not configured');
+  const response = await fetch(`${VIPPS_API_BASE}/accesstoken/get`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      client_id: VIPPS_CLIENT_ID!,
+      client_secret: VIPPS_CLIENT_SECRET!,
+      'Ocp-Apim-Subscription-Key': VIPPS_SUBSCRIPTION_KEY!,
+      'Merchant-Serial-Number': VIPPS_MSN!,
+    },
+    body: '',
+  });
+  if (!response.ok) throw new Error(`Vipps access token failed: ${response.status}`);
+  const data = await response.json() as { access_token: string };
+  return data.access_token;
+}
+async function vippsRequest(pathname: string, init: RequestInit = {}) {
+  const token = await vippsAccessToken();
+  const headers = new Headers(init.headers);
+  headers.set('Authorization', `Bearer ${token}`);
+  headers.set('Ocp-Apim-Subscription-Key', VIPPS_SUBSCRIPTION_KEY!);
+  headers.set('Merchant-Serial-Number', VIPPS_MSN!);
+  headers.set('Vipps-System-Name', 'flashmaster');
+  headers.set('Vipps-System-Version', '1.0.0');
+  headers.set('Content-Type', 'application/json');
+  return fetch(`${VIPPS_API_BASE}${pathname}`, { ...init, headers });
+}
+
 
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
@@ -33,7 +92,7 @@ if (apiKey) {
 
 // Public sales page
 app.get('/sales', (_req: Request, res: Response) => {
-  const paymentUrl = process.env.PAYMENT_URL || 'https://buy.stripe.com/5kQ14maom48ffWUfKL8og01';
+  const paymentUrl = process.env.PAYMENT_URL || '/api/vipps/create-payment';
   res.type('html').send(`<!doctype html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FlashMaster Pro — 2104 flashcards</title><style>body{margin:0;background:#070b14;color:#f8fafc;font:16px system-ui,sans-serif}.wrap{max-width:900px;margin:auto;padding:70px 24px}.hero{padding:40px;border:1px solid #263247;border-radius:28px;background:linear-gradient(135deg,#111827,#0b1220)}h1{font-size:48px;line-height:1.05;margin:12px 0}p{color:#aab5c7;line-height:1.7}.price{font-size:38px;font-weight:900;margin:28px 0}.buy{display:inline-block;padding:16px 26px;border-radius:14px;background:#6366f1;color:white;text-decoration:none;font-weight:900}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:25px}.card{padding:20px;border:1px solid #263247;border-radius:18px;background:#0d1422}.small{font-size:13px;color:#718096;margin-top:28px}</style></head><body><main class="wrap"><section class="hero"><div>FLASHMASTER PRO</div><h1>2104 flashcards + ditt eget flashcard-studio.</h1><p>Studer smartere med ferdig masterbank, spaced repetition, egne kortsett og import fra PDF, Word, Excel, CSV og tekst. Eksporter til Anki og Quizlet.</p><div class="price">799 kr</div><a class="buy" href="${paymentUrl}">Kjøp FlashMaster Pro</a><div class="grid"><div class="card"><b>2104 kort</b><p>Ferdig masterbank inkludert.</p></div><div class="card"><b>Lag selv</b><p>Opprett egne kort og kortsett.</p></div><div class="card"><b>Importer</b><p>PDF, Word, Excel, CSV og tekst.</p></div><div class="card"><b>Studer</b><p>Spaced repetition og statistikk.</p></div></div><p class="small">Digitalt produkt. Ikke medisinsk rådgivning. Kjøp gir tilgang til FlashMaster Pro-produktet som beskrevet på salgssiden.</p></section></main></body></html>`);
 });
 
@@ -44,6 +103,98 @@ app.get('/api/health', (_req: Request, res: Response) => {
     hasApiKey: !!apiKey,
     timestamp: new Date().toISOString(),
   });
+});
+
+
+// Vipps checkout and entitlement
+app.get('/api/vipps/create-payment', async (_req: Request, res: Response) => {
+  try {
+    if (!hasVippsConfig()) return res.status(503).json({ error: 'Vipps production credentials are not configured on the server yet.' });
+    const crypto = require('node:crypto');
+    const reference = `flashmaster-${crypto.randomBytes(12).toString('hex')}`;
+    const returnUrl = `${APP_URL}/purchase-complete?reference=${encodeURIComponent(reference)}`;
+    const response = await vippsRequest('/epayment/v1/payments', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': reference },
+      body: JSON.stringify({
+        amount: { currency: 'NOK', value: PRO_PRICE_NOK },
+        paymentMethod: { type: 'WALLET' },
+        reference,
+        paymentDescription: 'FlashMaster Pro — 2104 flashcards + eget flashcard-studio',
+        returnUrl,
+        userFlow: 'WEB_REDIRECT',
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ error: data });
+    res.cookie('flashmaster_pending', signedEntitlement(reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 15 * 60 * 1000, path: '/' });
+    return res.redirect(data.redirectUrl);
+  } catch (error: any) {
+    console.error('Vipps create payment error:', error);
+    return res.status(500).json({ error: error?.message || 'Kunne ikke starte Vipps-betaling' });
+  }
+});
+
+app.get('/api/vipps/status', async (req: Request, res: Response) => {
+  try {
+    if (!hasVippsConfig()) return res.status(503).json({ pro: false, configured: false });
+    const reference = String(req.query.reference || '');
+    const pending = verifyEntitlement(req.headers.cookie?.match(/(?:^|; )flashmaster_pending=([^;]+)/)?.[1]);
+    if (!reference || pending !== reference) return res.status(403).json({ pro: false, error: 'Ugyldig betalingsreferanse' });
+    const response = await vippsRequest(`/epayment/v1/payments/${encodeURIComponent(reference)}`);
+    const data = await response.json();
+    if (!response.ok) return res.status(response.status).json({ pro: false, error: data });
+    const captured = Number(data?.aggregate?.capturedAmount?.value || 0) >= PRO_PRICE_NOK;
+    if (captured) {
+      res.cookie('flashmaster_pro', signedEntitlement(reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
+      return res.json({ pro: true, state: data.state, reference });
+    }
+    if (data.state === 'AUTHORIZED' && Number(data?.aggregate?.authorizedAmount?.value || 0) >= PRO_PRICE_NOK) {
+      const capture = await vippsRequest(`/epayment/v1/payments/${encodeURIComponent(reference)}/capture`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': `capture-${reference}` },
+        body: JSON.stringify({ modificationAmount: { currency: 'NOK', value: PRO_PRICE_NOK } }),
+      });
+      if (capture.ok || capture.status === 409) {
+        res.cookie('flashmaster_pro', signedEntitlement(reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
+        return res.json({ pro: true, state: 'CAPTURED', reference });
+      }
+    }
+    return res.json({ pro: false, state: data.state || 'PENDING', reference });
+  } catch (error: any) {
+    console.error('Vipps status error:', error);
+    return res.status(500).json({ pro: false, error: error?.message || 'Kunne ikke kontrollere betaling' });
+  }
+});
+
+app.get('/api/pro/status', (req: Request, res: Response) => {
+  const reference = verifyEntitlement(req.headers.cookie?.match(/(?:^|; )flashmaster_pro=([^;]+)/)?.[1]);
+  res.json({ pro: Boolean(reference), configured: hasVippsConfig() });
+});
+
+app.get('/purchase-complete', (req: Request, res: Response) => {
+  res.redirect('/?purchase=complete&reference=' + encodeURIComponent(String(req.query.reference || '')));
+});
+
+app.post('/api/vipps/webhook', async (req: Request, res: Response) => {
+  try {
+    const event = req.body || {};
+    const reference = String(event.reference || '');
+    const name = String(event.name || '');
+    if (!reference.startsWith('flashmaster-')) return res.status(400).json({ error: 'Invalid reference' });
+    if (name === 'AUTHORIZED') {
+      const capture = await vippsRequest(`/epayment/v1/payments/${encodeURIComponent(reference)}/capture`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': `capture-${reference}` },
+        body: JSON.stringify({ modificationAmount: { currency: 'NOK', value: PRO_PRICE_NOK } }),
+      });
+      if (!capture.ok && capture.status !== 409) console.error('Vipps webhook capture failed', reference, capture.status);
+    }
+    return res.sendStatus(204);
+  } catch (error) {
+    console.error('Vipps webhook error:', error);
+    return res.sendStatus(500);
+  }
 });
 
 // AI Document & Text to Flashcards Endpoint
