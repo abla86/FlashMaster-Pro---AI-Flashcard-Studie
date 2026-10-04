@@ -1,6 +1,24 @@
 # FlashMaster Pro
 
+**Kjøp FlashMaster Pro: 799 kr**  
+https://buy.stripe.com/5kQ14maom48ffWUfKL8og01
+
+**Produkt:** https://flashmaster-pro-sxg7.onrender.com/sales
+
 AI-assisted flashcard and study application for creating, importing, studying, reviewing and exporting structured learning material.
+
+## Produktet som selges
+
+- **2104-korts masterbank inkludert**
+- Lag egne flashcards og egne kortsett
+- Importer PDF, Word, Excel, CSV og tekst
+- AI-generering av flashcards
+- Spaced repetition, studieplan og statistikk
+- AI-illustrasjoner og kortdesign
+- Eksport til Anki og Quizlet
+- Lokal/offline lagring av egne studie-data
+
+Kjøpet er et digitalt produkt til **799 kr** via Stripe. Kjøpsflyten bruker samme FlashMaster-applikasjon som produktet er bygget på.
 
 ## What it demonstrates
 
