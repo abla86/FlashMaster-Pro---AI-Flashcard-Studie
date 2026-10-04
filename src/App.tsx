@@ -74,6 +74,36 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeDesignTheme, setActiveDesignTheme] = useState<string>('auto');
   const [visibleCardCount, setVisibleCardCount] = useState(60);
+  const [proStatus, setProStatus] = useState<'loading' | 'active' | 'locked'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const reference = params.get('reference');
+        if (params.get('purchase') === 'complete' && reference) {
+          for (let attempt = 0; attempt < 8; attempt += 1) {
+            const response = await fetch(`/api/vipps/status?reference=${encodeURIComponent(reference)}`, { credentials: 'include' });
+            const data = await response.json();
+            if (data.pro) {
+              if (!cancelled) setProStatus('active');
+              window.history.replaceState({}, '', '/');
+              return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+        }
+        const response = await fetch('/api/pro/status', { credentials: 'include' });
+        const data = await response.json();
+        if (!cancelled) setProStatus(data.pro ? 'active' : 'locked');
+      } catch {
+        if (!cancelled) setProStatus('locked');
+      }
+    };
+    check();
+    return () => { cancelled = true; };
+  }, []);
 
   // Privacy & Offline
   const [isOfflineOnly, setIsOfflineOnly] = useState<boolean>(getOfflineShieldSetting());
@@ -85,6 +115,33 @@ export default function App() {
   const [galleryDeckFilter, setGalleryDeckFilter] = useState<string>('all');
   const [galleryDesignFilter, setGalleryDesignFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  if (proStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#070b14] text-white flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="text-2xl font-black">FLASHMASTER PRO</div>
+          <div className="text-sm text-slate-400">Kontrollerer tilgang…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (proStatus === 'locked') {
+    return (
+      <div className="min-h-screen bg-[#070b14] text-white px-6 py-16">
+        <div className="max-w-3xl mx-auto rounded-3xl border border-slate-700 bg-slate-900/80 p-8 sm:p-12 text-center space-y-6">
+          <div className="text-xs font-black tracking-[0.25em] text-indigo-300">FLASHMASTER PRO</div>
+          <h1 className="text-4xl sm:text-5xl font-black">2104 flashcards + ditt eget flashcard-studio</h1>
+          <p className="text-slate-300 leading-7">Få tilgang til masterbanken, egne kort og kortsett, import fra PDF/Word/Excel/CSV/tekst, spaced repetition og eksport til Anki/Quizlet.</p>
+          <div className="text-4xl font-black">799 kr</div>
+          <a href="/api/vipps/create-payment" className="inline-flex px-7 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black">Kjøp med Vipps</a>
+          <p className="text-xs text-slate-500">Etter godkjent betaling aktiveres Pro automatisk.</p>
+          <a href="/sales" className="block text-sm text-slate-400 hover:text-white">Se full produktinformasjon</a>
+        </div>
+      </div>
+    );
+  }
 
   // Initial load
   useEffect(() => {
