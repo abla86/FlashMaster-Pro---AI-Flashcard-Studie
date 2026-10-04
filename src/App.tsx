@@ -75,6 +75,7 @@ export default function App() {
   const [activeDesignTheme, setActiveDesignTheme] = useState<string>('auto');
   const [visibleCardCount, setVisibleCardCount] = useState(60);
   const [proStatus, setProStatus] = useState<'loading' | 'active' | 'locked'>('loading');
+  const [vippsAvailable, setVippsAvailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,21 +83,36 @@ export default function App() {
       try {
         const params = new URLSearchParams(window.location.search);
         const reference = params.get('reference');
-        if (params.get('purchase') === 'complete' && reference) {
-          for (let attempt = 0; attempt < 8; attempt += 1) {
-            const response = await fetch(`/api/vipps/status?reference=${encodeURIComponent(reference)}`, { credentials: 'include' });
-            const data = await response.json();
-            if (data.pro) {
-              if (!cancelled) setProStatus('active');
-              window.history.replaceState({}, '', '/');
-              return;
+        const sessionId = params.get('session_id');
+        if (params.get('purchase') === 'complete') {
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            if (sessionId) {
+              const stripeResponse = await fetch(`/api/stripe/status?session_id=${encodeURIComponent(sessionId)}`, { credentials: 'include' });
+              const stripeData = await stripeResponse.json();
+              if (stripeData.pro) {
+                if (!cancelled) setProStatus('active');
+                window.history.replaceState({}, '', '/');
+                return;
+              }
+            }
+            if (reference) {
+              const vippsResponse = await fetch(`/api/vipps/status?reference=${encodeURIComponent(reference)}`, { credentials: 'include' });
+              const vippsData = await vippsResponse.json();
+              if (vippsData.pro) {
+                if (!cancelled) setProStatus('active');
+                window.history.replaceState({}, '', '/');
+                return;
+              }
             }
             await new Promise((resolve) => setTimeout(resolve, 1500));
           }
         }
         const response = await fetch('/api/pro/status', { credentials: 'include' });
         const data = await response.json();
-        if (!cancelled) setProStatus(data.pro ? 'active' : 'locked');
+        if (!cancelled) {
+          setVippsAvailable(Boolean(data.vippsConfigured));
+          setProStatus(data.pro ? 'active' : 'locked');
+        }
       } catch {
         if (!cancelled) setProStatus('locked');
       }
