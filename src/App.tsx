@@ -88,12 +88,20 @@ export default function App() {
 
   // Initial load
   useEffect(() => {
-    const loadedDecks = loadDecks();
-    const loadedCards = loadCards();
-    const loadedStats = loadStats();
-    setDecks(loadedDecks);
-    setCards(loadedCards);
-    setStats(loadedStats);
+    let active = true;
+
+    const hydrate = async () => {
+      const loaded = await hydrateFromIndexedDb();
+      if (!active) return;
+      setDecks(loaded.decks);
+      setCards(loaded.cards);
+      setStats(loaded.stats);
+    };
+
+    hydrate();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Update HTML class for dark mode
