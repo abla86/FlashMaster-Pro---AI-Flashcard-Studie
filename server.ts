@@ -20,6 +20,8 @@ const VIPPS_MSN = process.env.VIPPS_MSN;
 const APP_URL = process.env.APP_URL || 'https://flashmaster-pro-sxg7.onrender.com';
 const PRO_PRICE_NOK = 79900;
 const ENTITLEMENT_SECRET = process.env.ENTITLEMENT_SECRET || process.env.AUTH_SESSION_SECRET;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const stripePaidSessions = new Map<string, number>();
 
 function hasVippsConfig() {
   return Boolean(VIPPS_CLIENT_ID && VIPPS_CLIENT_SECRET && VIPPS_SUBSCRIPTION_KEY && VIPPS_MSN && ENTITLEMENT_SECRET);
@@ -28,11 +30,12 @@ function signValue(value: string) {
   const crypto = require('node:crypto');
   return crypto.createHmac('sha256', ENTITLEMENT_SECRET!).update(value).digest('base64url');
 }
-function signedEntitlement(reference: string) {
-  return `vipps:${reference}.${signValue(`vipps:${reference}`)}`;
+function signedEntitlement(provider: string, reference: string) {
+  const payload = provider + ':' + reference;
+  return payload + '.' + signValue(payload);
 }
 function verifyEntitlement(value?: string) {
-  if (!value || !value.startsWith('vipps:')) return null;
+  if (!value || (!value.startsWith('vipps:') && !value.startsWith('stripe:'))) return null;
   const dot = value.lastIndexOf('.');
   if (dot < 0) return null;
   const payload = value.slice(0, dot);
@@ -40,7 +43,7 @@ function verifyEntitlement(value?: string) {
   const expected = signValue(payload);
   const crypto = require('node:crypto');
   if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-  return payload.slice('vipps:'.length);
+  return payload;
 }
 async function vippsAccessToken() {
   if (!hasVippsConfig()) throw new Error('Vipps production credentials are not configured');
@@ -71,6 +74,32 @@ async function vippsRequest(pathname: string, init: RequestInit = {}) {
   return fetch(`${VIPPS_API_BASE}${pathname}`, { ...init, headers });
 }
 
+
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req: Request, res: Response) => {
+  try {
+    if (!STRIPE_WEBHOOK_SECRET) return res.status(503).send('Stripe webhook secret is not configured');
+    const signature = String(req.headers['stripe-signature'] || '');
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+    const timestamp = signature.split(',').find((part: string) => part.startsWith('t='))?.slice(2);
+    const signatures = signature.split(',').filter((part: string) => part.startsWith('v1=')).map((part: string) => part.slice(3));
+    if (!timestamp || signatures.length === 0) return res.status(400).send('Invalid Stripe signature');
+    const signedPayload = timestamp + '.' + rawBody.toString('utf8');
+    const expected = require('node:crypto').createHmac('sha256', STRIPE_WEBHOOK_SECRET).update(signedPayload).digest('hex');
+    const valid = signatures.some((candidate: string) => candidate.length === expected.length && require('node:crypto').timingSafeEqual(Buffer.from(candidate), Buffer.from(expected)));
+    if (!valid) return res.status(400).send('Invalid Stripe signature');
+    const event = JSON.parse(rawBody.toString('utf8'));
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data?.object;
+      if (session?.payment_status === 'paid' && session?.metadata?.product_code === 'flashmaster-pro' && Number(session?.amount_total || 0) >= PRO_PRICE_NOK && session?.id) {
+        stripePaidSessions.set(String(session.id), Date.now() + 24 * 60 * 60 * 1000);
+      }
+    }
+    return res.sendStatus(204);
+  } catch (error) {
+    console.error('Stripe webhook error:', error);
+    return res.sendStatus(400);
+  }
+});
 
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
@@ -106,6 +135,17 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 
+app.get('/api/stripe/status', (req: Request, res: Response) => {
+  const sessionId = String(req.query.session_id || '');
+  const expiresAt = stripePaidSessions.get(sessionId);
+  if (!sessionId || !expiresAt || expiresAt < Date.now()) {
+    if (expiresAt) stripePaidSessions.delete(sessionId);
+    return res.status(403).json({ pro: false });
+  }
+  res.cookie('flashmaster_pro', signedEntitlement('stripe', sessionId), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
+  return res.json({ pro: true });
+});
+
 // Vipps checkout and entitlement
 app.get('/api/vipps/create-payment', async (_req: Request, res: Response) => {
   try {
@@ -127,7 +167,7 @@ app.get('/api/vipps/create-payment', async (_req: Request, res: Response) => {
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data });
-    res.cookie('flashmaster_pending', signedEntitlement(reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 15 * 60 * 1000, path: '/' });
+    res.cookie('flashmaster_pending', signedEntitlement('vipps', reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 15 * 60 * 1000, path: '/' });
     return res.redirect(data.redirectUrl);
   } catch (error: any) {
     console.error('Vipps create payment error:', error);
@@ -173,7 +213,7 @@ app.get('/api/pro/status', (req: Request, res: Response) => {
 });
 
 app.get('/purchase-complete', (req: Request, res: Response) => {
-  res.redirect('/?purchase=complete&reference=' + encodeURIComponent(String(req.query.reference || '')));
+  res.redirect('/?purchase=complete&session_id=' + encodeURIComponent(String(req.query.session_id || '')) + '&reference=' + encodeURIComponent(String(req.query.reference || '')));
 });
 
 app.post('/api/vipps/webhook', async (req: Request, res: Response) => {
