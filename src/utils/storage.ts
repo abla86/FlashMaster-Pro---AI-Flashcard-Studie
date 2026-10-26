@@ -8,6 +8,7 @@ import {
   idbLoadDecks,
   idbSaveStats,
   idbLoadStats,
+  idbClearAll,
 } from './indexedDb';
 
 const STORAGE_KEYS = {
@@ -365,12 +366,11 @@ export function resetAllDataToDefault(): void {
   setStored(STORAGE_KEYS.STATS, DEFAULT_STATS);
 }
 
-// Secure Purge
-export function purgeAllDataSecurely(): void {
+// Clear app-owned browser storage. This is logical deletion, not forensic erasure.
+export async function purgeAllDataSecurely(): Promise<void> {
   memoryCards = [];
   memoryDecks = [];
   memoryStats = null;
-  idbSaveCards([]);
-  idbSaveDecks([]);
-  Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
+  await idbClearAll();
+  Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
 }
