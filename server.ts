@@ -82,7 +82,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req:
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
     const timestamp = signature.split(',').find((part: string) => part.startsWith('t='))?.slice(2);
     const signatures = signature.split(',').filter((part: string) => part.startsWith('v1=')).map((part: string) => part.slice(3));
-    if (!timestamp || signatures.length === 0) return res.status(400).send('Invalid Stripe signature');
+    const timestampSeconds = Number(timestamp);
+    if (!timestamp || !Number.isSafeInteger(timestampSeconds) || signatures.length === 0) {
+      return res.status(400).send('Invalid Stripe signature');
+    }
+    // Reject stale webhook signatures to reduce replay risk.
+    if (Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds) > 300) {
+      return res.status(400).send('Expired Stripe signature');
+    }
     const signedPayload = timestamp + '.' + rawBody.toString('utf8');
     const expected = require('node:crypto').createHmac('sha256', STRIPE_WEBHOOK_SECRET).update(signedPayload).digest('hex');
     const valid = signatures.some((candidate: string) => candidate.length === expected.length && require('node:crypto').timingSafeEqual(Buffer.from(candidate), Buffer.from(expected)));
@@ -90,8 +97,15 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req:
     const event = JSON.parse(rawBody.toString('utf8'));
     if (event.type === 'checkout.session.completed') {
       const session = event.data?.object;
-      if (session?.payment_status === 'paid' && session?.metadata?.product_code === 'flashmaster-pro' && Number(session?.amount_total || 0) >= PRO_PRICE_NOK && session?.id) {
-        stripePaidSessions.set(String(session.id), Date.now() + 24 * 60 * 60 * 1000);
+      if (
+        session?.payment_status === 'paid' &&
+        session?.mode === 'payment' &&
+        session?.currency === 'nok' &&
+        Number(session?.amount_total) === PRO_PRICE_NOK &&
+        session?.metadata?.product_code === 'flashmaster-pro' &&
+        typeof session?.id === 'string'
+      ) {
+        stripePaidSessions.set(session.id, Date.now() + 24 * 60 * 60 * 1000);
       }
     }
     return res.sendStatus(204);
@@ -181,13 +195,13 @@ app.get('/api/vipps/status', async (req: Request, res: Response) => {
     if (!hasVippsConfig()) return res.status(503).json({ pro: false, configured: false });
     const reference = String(req.query.reference || '');
     const pending = verifyEntitlement(req.headers.cookie?.match(/(?:^|; )flashmaster_pending=([^;]+)/)?.[1]);
-    if (!reference || pending !== reference) return res.status(403).json({ pro: false, error: 'Ugyldig betalingsreferanse' });
+    if (!reference || pending !== `vipps:${reference}`) return res.status(403).json({ pro: false, error: 'Ugyldig betalingsreferanse' });
     const response = await vippsRequest(`/epayment/v1/payments/${encodeURIComponent(reference)}`);
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ pro: false, error: data });
     const captured = Number(data?.aggregate?.capturedAmount?.value || 0) >= PRO_PRICE_NOK;
     if (captured) {
-      res.cookie('flashmaster_pro', signedEntitlement(reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
+      res.cookie('flashmaster_pro', signedEntitlement('vipps', reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
       return res.json({ pro: true, state: data.state, reference });
     }
     if (data.state === 'AUTHORIZED' && Number(data?.aggregate?.authorizedAmount?.value || 0) >= PRO_PRICE_NOK) {
