@@ -98,7 +98,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req:
     const expected = require('node:crypto').createHmac('sha256', STRIPE_WEBHOOK_SECRET).update(signedPayload).digest('hex');
     const valid = signatures.some((candidate: string) => candidate.length === expected.length && require('node:crypto').timingSafeEqual(Buffer.from(candidate), Buffer.from(expected)));
     if (!valid) return res.status(400).send('Invalid Stripe signature');
-    const event = JSON.parse(rawBody.toString('utf8'));
+    JSON.parse(rawBody.toString('utf8'));
     // Payment status is verified against Stripe's API when the buyer returns.
     return res.sendStatus(204);
   } catch (error) {
