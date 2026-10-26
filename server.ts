@@ -44,12 +44,13 @@ function signValue(value: string) {
   const crypto = require('node:crypto');
   return crypto.createHmac('sha256', ENTITLEMENT_SECRET!).update(value).digest('base64url');
 }
-function signedEntitlement(provider: string, reference: string) {
-  const payload = provider + ':' + reference;
+function signedEntitlement(provider: string, reference: string, ttlMs = 365 * 24 * 60 * 60 * 1000) {
+  const expiresAt = Date.now() + ttlMs;
+  const payload = `${provider}:${reference}:${expiresAt}`;
   return payload + '.' + signValue(payload);
 }
 function verifyEntitlement(value?: string) {
-  if (!value || (!value.startsWith('vipps:') && !value.startsWith('stripe:'))) return null;
+  if (!value) return null;
   const dot = value.lastIndexOf('.');
   if (dot < 0) return null;
   const payload = value.slice(0, dot);
@@ -57,6 +58,11 @@ function verifyEntitlement(value?: string) {
   const expected = signValue(payload);
   const crypto = require('node:crypto');
   if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+
+  const parts = payload.split(':');
+  if (parts.length !== 3 || !['vipps', 'stripe'].includes(parts[0]) || !parts[1]) return null;
+  const expiresAt = Number(parts[2]);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= Date.now()) return null;
   return payload;
 }
 async function vippsAccessToken() {
@@ -278,7 +284,7 @@ app.get('/api/vipps/create-payment', async (_req: Request, res: Response) => {
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data });
-    res.cookie('flashmaster_pending', signedEntitlement('vipps', reference), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 15 * 60 * 1000, path: '/' });
+    res.cookie('flashmaster_pending', signedEntitlement('vipps', reference, 15 * 60 * 1000), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 15 * 60 * 1000, path: '/' });
     return res.redirect(data.redirectUrl);
   } catch (error: any) {
     console.error('Vipps create payment error:', error);
@@ -291,7 +297,7 @@ app.get('/api/vipps/status', async (req: Request, res: Response) => {
     if (!hasVippsConfig()) return res.status(503).json({ pro: false, configured: false });
     const reference = String(req.query.reference || '');
     const pending = verifyEntitlement(req.headers.cookie?.match(/(?:^|; )flashmaster_pending=([^;]+)/)?.[1]);
-    if (!reference || pending !== `vipps:${reference}`) return res.status(403).json({ pro: false, error: 'Ugyldig betalingsreferanse' });
+    if (!reference || !pending?.startsWith(`vipps:${reference}:`)) return res.status(403).json({ pro: false, error: 'Ugyldig betalingsreferanse' });
     const response = await vippsRequest(`/epayment/v1/payments/${encodeURIComponent(reference)}`);
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ pro: false, error: data });
