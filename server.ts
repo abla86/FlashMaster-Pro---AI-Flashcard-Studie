@@ -17,6 +17,7 @@ const VIPPS_CLIENT_ID = process.env.VIPPS_CLIENT_ID;
 const VIPPS_CLIENT_SECRET = process.env.VIPPS_CLIENT_SECRET;
 const VIPPS_SUBSCRIPTION_KEY = process.env.VIPPS_SUBSCRIPTION_KEY;
 const VIPPS_MSN = process.env.VIPPS_MSN;
+const VIPPS_WEBHOOK_SECRET = process.env.VIPPS_WEBHOOK_SECRET;
 const APP_URL = process.env.APP_URL || 'https://flashmaster-pro-sxg7.onrender.com';
 const PRO_PRICE_NOK = 79900;
 const ENTITLEMENT_SECRET = process.env.ENTITLEMENT_SECRET || process.env.AUTH_SESSION_SECRET;
@@ -233,6 +234,24 @@ app.get('/purchase-complete', (req: Request, res: Response) => {
 
 app.post('/api/vipps/webhook', async (req: Request, res: Response) => {
   try {
+    // Never trust an internet-reachable webhook without a configured shared secret.
+    if (!VIPPS_WEBHOOK_SECRET) {
+      return res.status(503).json({ error: 'Vipps webhook authentication is not configured.' });
+    }
+    const suppliedAuthorization = String(req.headers.authorization || '');
+    const suppliedSecret = suppliedAuthorization.startsWith('Bearer ')
+      ? suppliedAuthorization.slice(7)
+      : '';
+    const crypto = require('node:crypto');
+    const expectedSecret = Buffer.from(VIPPS_WEBHOOK_SECRET, 'utf8');
+    const actualSecret = Buffer.from(suppliedSecret, 'utf8');
+    if (
+      actualSecret.length !== expectedSecret.length ||
+      !crypto.timingSafeEqual(actualSecret, expectedSecret)
+    ) {
+      return res.status(401).json({ error: 'Invalid webhook authorization.' });
+    }
+
     const event = req.body || {};
     const reference = String(event.reference || '');
     const name = String(event.name || '');
