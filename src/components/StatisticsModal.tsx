@@ -40,15 +40,15 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
   const masteredCount = boxCounts[3] + boxCounts[4]; // Box 4 and 5
   const masteredPercent = totalCards > 0 ? Math.round((masteredCount / totalCards) * 100) : 0;
 
-  const correctReviews = stats.correctReviews || Math.round((stats.totalReviews * stats.retentionRate) / 100);
-  const wrongReviews = stats.wrongReviews || (stats.totalReviews - correctReviews);
+  const correctReviews = stats.correctReviews ?? Math.round((stats.totalReviews * stats.retentionRate) / 100);
+  const wrongReviews = stats.wrongReviews ?? (stats.totalReviews - correctReviews);
   const accuracyPercent = stats.totalReviews > 0 ? Math.round((correctReviews / stats.totalReviews) * 100) : 0;
 
   // Recent 7 days activity
   const last7Days: { dateStr: string; label: string; count: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const dayName = d.toLocaleDateString('no-NO', { weekday: 'short' });
     const count = stats.dailyReviews[dateStr] || 0;
     last7Days.push({ dateStr, label: dayName, count });
@@ -74,7 +74,7 @@ export const StatisticsModal: React.FC<StatisticsModalProps> = ({
               FlashForge Læringsstatistikk & Fremgang
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Spacert repetisjon, treffsikkerhet, kategorieresultat og svake tema &bull; 100% lokalt og privat
+              Spacert repetisjon, treffsikkerhet, kategorieresultat og svake tema. AI-funksjoner kan sende innhold til konfigurert leverandør.
             </p>
           </div>
 
