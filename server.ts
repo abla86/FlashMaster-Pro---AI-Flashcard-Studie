@@ -23,12 +23,22 @@ const PRO_PRICE_NOK = 79900;
 const ENTITLEMENT_SECRET = process.env.ENTITLEMENT_SECRET || process.env.AUTH_SESSION_SECRET;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const SELLER_LEGAL_NAME = process.env.SELLER_LEGAL_NAME || '';
+const SELLER_POSTAL_ADDRESS = process.env.SELLER_POSTAL_ADDRESS || '';
+const SELLER_ORG_NUMBER = process.env.SELLER_ORG_NUMBER || '';
+const SELLER_CONTACT_EMAIL = process.env.SELLER_CONTACT_EMAIL || '';
 
+function hasSalesLegalInfo() {
+  return Boolean(SELLER_LEGAL_NAME.trim() && SELLER_POSTAL_ADDRESS.trim() && SELLER_ORG_NUMBER.trim() && SELLER_CONTACT_EMAIL.trim());
+}
 function hasStripeConfig() {
-  return Boolean(STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET && ENTITLEMENT_SECRET);
+  return Boolean(hasSalesLegalInfo() && STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET && ENTITLEMENT_SECRET);
 }
 function hasVippsConfig() {
-  return Boolean(VIPPS_CLIENT_ID && VIPPS_CLIENT_SECRET && VIPPS_SUBSCRIPTION_KEY && VIPPS_MSN && ENTITLEMENT_SECRET);
+  return Boolean(hasSalesLegalInfo() && VIPPS_CLIENT_ID && VIPPS_CLIENT_SECRET && VIPPS_SUBSCRIPTION_KEY && VIPPS_MSN && VIPPS_WEBHOOK_SECRET && ENTITLEMENT_SECRET);
+}
+function escapeHtml(value: string) {
+  return value.replace(/[&<>\"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[char]!));
 }
 function signValue(value: string) {
   const crypto = require('node:crypto');
@@ -163,14 +173,36 @@ app.get('/api/stripe/create-payment', async (_req: Request, res: Response) => {
   }
 });
 
+// Legal and data-handling information. Payment stays disabled until seller identity is configured.
+app.get('/terms', (_req: Request, res: Response) => {
+  const seller = escapeHtml(SELLER_LEGAL_NAME || 'Selgeropplysninger ikke konfigurert');
+  const address = escapeHtml(SELLER_POSTAL_ADDRESS || 'Ikke konfigurert');
+  const orgNumber = escapeHtml(SELLER_ORG_NUMBER || 'Ikke konfigurert');
+  const email = escapeHtml(SELLER_CONTACT_EMAIL || 'Ikke konfigurert');
+  res.type('html').send(`<!doctype html><html lang="no"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vilkår — FlashMaster Pro</title><body style="max-width:800px;margin:40px auto;padding:0 20px;font:16px/1.6 system-ui;color:#172033"><h1>Vilkår for FlashMaster Pro</h1><p><b>Selger:</b> ${seller}<br><b>Adresse:</b> ${address}<br><b>Organisasjonsnummer:</b> ${orgNumber}<br><b>Kontakt:</b> ${email}</p><h2>Produkt og pris</h2><p>FlashMaster Pro er et digitalt studieprodukt. Oppgitt pris er 799 NOK for engangskjøp. Eventuelle avgifter og betalingsvilkår skal fremgå før bestilling. Det er ikke et abonnement med mindre dette uttrykkelig opplyses før kjøpet.</p><h2>Tilgang og funksjoner</h2><p>Funksjoner kan være avhengige av nettleser, hosting, betalingsleverandør og eksterne AI-tjenester. AI-generert innhold kan være feil eller ufullstendig og må kontrolleres av brukeren.</p><h2>Angrerett og reklamasjon</h2><p>Lovbestemte forbrukerrettigheter gjelder. Denne siden hevder ikke at angreretten bortfaller ved umiddelbar levering av digitalt innhold. Kontakt selgeren på adressen over for spørsmål, feil, refusjon eller bruk av angrerett. Vilkår og bestillingsflyt må være gjennomgått før salg aktiveres.</p><h2>Ansvarsgrense</h2><p>Flashcards er læringsstøtte, ikke medisinsk rådgivning eller erstatning for oppdaterte fagkilder, formell opplæring eller klinisk skjønn.</p><p><a href="/sales">Tilbake til produktet</a> · <a href="/privacy">Personvern</a> · <a href="/withdrawal">Angrerett</a></p></body></html>`);
+});
+
+app.get('/privacy', (_req: Request, res: Response) => {
+  const seller = escapeHtml(SELLER_LEGAL_NAME || 'Selgeropplysninger ikke konfigurert');
+  const email = escapeHtml(SELLER_CONTACT_EMAIL || 'Ikke konfigurert');
+  res.type('html').send(`<!doctype html><html lang="no"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Personvern — FlashMaster Pro</title><body style="max-width:800px;margin:40px auto;padding:0 20px;font:16px/1.6 system-ui;color:#172033"><h1>Personvern</h1><p><b>Behandlingsansvarlig / kontakt:</b> ${seller}, ${email}</p><h2>Studiedata</h2><p>Kort, kortsett og statistikk lagres i nettleserens LocalStorage og IndexedDB. Appen sletter data logisk når brukeren velger sletting, men garanterer ikke sikker overskriving av lagringsmediet. Data i nettleseren er ikke kryptert av appen og kan være tilgjengelig for skript med samme opprinnelse eller andre som har tilgang til nettleserprofilen.</p><h2>AI-funksjoner</h2><p>Når AI-funksjoner brukes, kan teksten eller dokumentinnholdet som er nødvendig for funksjonen sendes fra serveren til Google Gemini. Ikke send helseopplysninger, pasientidentifiserbare data, arbeidsgiverkonfidensielt materiale eller annet sensitivt innhold uten at bruken og behandlingsgrunnlaget er vurdert på forhånd.</p><h2>Betaling og tekniske data</h2><p>Ved kjøp behandles betalingsopplysninger av valgt betalingsleverandør (Stripe og/eller Vipps). Appen mottar betalingsstatus og tekniske forespørsler. Hosting- og nettverksleverandører kan behandle tekniske logger. Kontroller gjeldende vilkår hos leverandørene.</p><h2>Dine valg og kontakt</h2><p>Du kan slette lokale studiedata via appens slettefunksjon og nettleserens lagringsinnstillinger. Dette fjerner ikke nødvendigvis logger eller opplysninger som betalingsleverandører er pålagt å beholde. For innsyn, retting, sletting eller spørsmål, kontakt ${email}. Selger må bekrefte behandlingsgrunnlag, lagringstid, databehandlere og rettighetsprosedyre før salg åpnes.</p><p><a href="/sales">Tilbake til produktet</a> · <a href="/terms">Vilkår</a> · <a href="/withdrawal">Angrerett</a></p></body></html>`);
+});
+
+app.get('/withdrawal', (_req: Request, res: Response) => {
+  const email = escapeHtml(SELLER_CONTACT_EMAIL || 'Ikke konfigurert');
+  res.type('html').send(`<!doctype html><html lang="no"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Angrerett — FlashMaster Pro</title><body style="max-width:800px;margin:40px auto;padding:0 20px;font:16px/1.6 system-ui;color:#172033"><h1>Angrerett og henvendelser</h1><p>Lovbestemte rettigheter etter gjeldende forbrukerregler gjelder. Denne siden lover ikke at angreretten bortfaller når digital tilgang gis. For å melde at du vil angre kjøpet, send en tydelig melding til <a href="mailto:${email}">${email}</a> med kjøpsdato, betalingsreferanse og at du ønsker å benytte angreretten. Ikke send kortnummer eller andre betalingshemmeligheter.</p><p><b>Standardmelding:</b> «Jeg gir med dette melding om at jeg ønsker å gå fra avtalen om kjøp av FlashMaster Pro. Kjøpsdato: ____. Betalingsreferanse: ____.»</p><p>Selger må sikre at lovpålagt forhåndsinformasjon, standard angreskjema og ordrebekreftelse gis på riktig måte før salg aktiveres.</p><p><a href="/sales">Tilbake til produktet</a> · <a href="/terms">Vilkår</a> · <a href="/privacy">Personvern</a></p></body></html>`);
+});
+
 // Public sales page
 app.get('/sales', (_req: Request, res: Response) => {
   const stripeButton = hasStripeConfig() ? '<a class="buy" href="/api/stripe/create-payment">Kjøp med kort</a>' : '';
   const vippsButton = hasVippsConfig() ? '<a class="buy secondary" href="/api/vipps/create-payment">Kjøp med Vipps</a>' : '';
-  const paymentUnavailable = !hasStripeConfig() && !hasVippsConfig()
-    ? '<p class="small">Betaling er ikke tilgjengelig akkurat nå. Ingen betaling kan gjennomføres før betalingsoppsettet er aktivert.</p>'
-    : '';
-  res.type('html').send(`<!doctype html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FlashMaster Pro — 2104 flashcards</title><style>body{margin:0;background:#070b14;color:#f8fafc;font:16px system-ui,sans-serif}.wrap{max-width:900px;margin:auto;padding:70px 24px}.hero{padding:40px;border:1px solid #263247;border-radius:28px;background:linear-gradient(135deg,#111827,#0b1220)}h1{font-size:48px;line-height:1.05;margin:12px 0}p{color:#aab5c7;line-height:1.7}.price{font-size:38px;font-weight:900;margin:28px 0}.buy{display:inline-block;padding:16px 26px;border-radius:14px;background:#6366f1;color:white;text-decoration:none;font-weight:900;margin:4px}.buy.secondary{background:#334155}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:25px}.card{padding:20px;border:1px solid #263247;border-radius:18px;background:#0d1422}.small{font-size:13px;color:#718096;margin-top:28px}</style></head><body><main class="wrap"><section class="hero"><div>FLASHMASTER PRO</div><h1>2104 flashcards + ditt eget flashcard-studio.</h1><p>Studer smartere med ferdig masterbank, spaced repetition, egne kortsett og import fra PDF, Word, Excel, CSV og tekst. Eksporter til Anki og Quizlet.</p><div class="price">799 kr</div>${stripeButton}${vippsButton}${paymentUnavailable}<div class="grid"><div class="card"><b>2104 kort</b><p>Ferdig masterbank inkludert.</p></div><div class="card"><b>Lag selv</b><p>Opprett egne kort og kortsett.</p></div><div class="card"><b>Importer</b><p>PDF, Word, Excel, CSV og tekst.</p></div><div class="card"><b>Studer</b><p>Spaced repetition og statistikk.</p></div></div><p class="small">Digitalt produkt. Ikke medisinsk rådgivning. Kjøp gir tilgang til FlashMaster Pro-produktet som beskrevet på salgssiden.</p></section></main></body></html>`);
+  const paymentUnavailable = !hasSalesLegalInfo()
+    ? '<p class="small">Kjøp er deaktivert til selgeridentitet, organisasjonsnummer, postadresse og kontaktadresse er konfigurert. Dette er nødvendig før produktet kan selges.</p>'
+    : (!hasStripeConfig() && !hasVippsConfig()
+      ? '<p class="small">Betaling er ikke tilgjengelig akkurat nå. Ingen betaling kan gjennomføres før betalingsoppsettet er aktivert.</p>'
+      : '');
+  res.type('html').send(`<!doctype html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FlashMaster Pro — 2104 flashcards</title><style>body{margin:0;background:#070b14;color:#f8fafc;font:16px system-ui,sans-serif}.wrap{max-width:900px;margin:auto;padding:70px 24px}.hero{padding:40px;border:1px solid #263247;border-radius:28px;background:linear-gradient(135deg,#111827,#0b1220)}h1{font-size:48px;line-height:1.05;margin:12px 0}p{color:#aab5c7;line-height:1.7}.price{font-size:38px;font-weight:900;margin:28px 0}.buy{display:inline-block;padding:16px 26px;border-radius:14px;background:#6366f1;color:white;text-decoration:none;font-weight:900;margin:4px}.buy.secondary{background:#334155}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:25px}.card{padding:20px;border:1px solid #263247;border-radius:18px;background:#0d1422}.small{font-size:13px;color:#718096;margin-top:28px}</style></head><body><main class="wrap"><section class="hero"><div>FLASHMASTER PRO</div><h1>2104 flashcards + ditt eget flashcard-studio.</h1><p>Studer smartere med ferdig masterbank, spaced repetition, egne kortsett og import fra PDF, Word, Excel, CSV og tekst. Eksporter til Anki og Quizlet.</p><div class="price">799 kr</div>${stripeButton}${vippsButton}${paymentUnavailable}<div class="grid"><div class="card"><b>2104 kort</b><p>Ferdig masterbank inkludert.</p></div><div class="card"><b>Lag selv</b><p>Opprett egne kort og kortsett.</p></div><div class="card"><b>Importer</b><p>PDF, Word, Excel, CSV og tekst.</p></div><div class="card"><b>Studer</b><p>Spaced repetition og statistikk.</p></div></div><p class="small">Digitalt produkt. Ikke medisinsk rådgivning. AI-generert læringsinnhold må kontrolleres. <a href="/terms">Vilkår</a> · <a href="/privacy">Personvern</a> · <a href="/withdrawal">Angrerett</a></p></section></main></body></html>`);
 });
 
 // Health check endpoint
