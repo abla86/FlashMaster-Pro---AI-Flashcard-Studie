@@ -5,6 +5,8 @@ https://buy.stripe.com/5kQ14maom48ffWUfKL8og01
 
 **Produkt:** https://flashmaster-pro-sxg7.onrender.com/sales
 
+**Betalingsoppsett:** Automatisk tilgang krever gyldig Stripe/Vipps-konfigurasjon på serveren. Vipps-webhook må ha delt hemmelighet konfigurert både hos Vipps og i `VIPPS_WEBHOOK_SECRET`.
+
 AI-assisted flashcard and study application for creating, importing, studying, reviewing and exporting structured learning material.
 
 ## Produktet som selges
@@ -30,7 +32,8 @@ Kjøpet er et digitalt produkt til **799 kr** via Stripe. Kjøpsflyten bruker sa
 - Import/export workflows
 - Statistics and study planning
 - IndexedDB/local browser persistence
-- Offline/privacy-oriented controls
+- A local-study preference (not a network firewall)
+- Privacy controls with explicit browser-storage limitations
 - SVG illustration generation
 - AI-assisted document-to-flashcard conversion
 
