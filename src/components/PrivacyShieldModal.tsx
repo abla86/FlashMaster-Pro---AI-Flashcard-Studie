@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   EyeOff,
 } from 'lucide-react';
-import { purgeAllDataSecurely } from '../utils/storage';
+import { clearLocalAppData } from '../utils/storage';
 
 interface PrivacyShieldModalProps {
   isOfflineOnly: boolean;
