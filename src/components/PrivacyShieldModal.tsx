@@ -30,7 +30,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
         'Slette egendefinerte kort, kortsett, statistikk og lokalt importert innhold fra appens nettleserlagring? Den innebygde masterbanken blir ikke slettet. Dette er logisk sletting, ikke garantert sikker overskriving av lagringsmediet.'
       )
     ) {
-      void purgeAllDataSecurely().then(() => {
+      void clearLocalAppData().then(() => {
         onPurgeData();
         onClose();
       }).catch(() => {
