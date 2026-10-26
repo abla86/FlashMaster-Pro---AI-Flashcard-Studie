@@ -196,15 +196,46 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 
-app.get('/api/stripe/status', (req: Request, res: Response) => {
+app.get('/api/stripe/status', async (req: Request, res: Response) => {
   const sessionId = String(req.query.session_id || '');
-  const expiresAt = stripePaidSessions.get(sessionId);
-  if (!sessionId || !expiresAt || expiresAt < Date.now()) {
-    if (expiresAt) stripePaidSessions.delete(sessionId);
+  if (!hasStripeConfig() || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId)) {
     return res.status(403).json({ pro: false });
   }
-  res.cookie('flashmaster_pro', signedEntitlement('stripe', sessionId), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
-  return res.json({ pro: true });
+
+  try {
+    // Verify payment directly with Stripe so a process restart cannot erase purchase evidence.
+    const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
+      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
+    });
+    if (!response.ok) return res.status(403).json({ pro: false });
+    const session = await response.json() as {
+      id?: string;
+      mode?: string;
+      payment_status?: string;
+      currency?: string;
+      amount_total?: number;
+      metadata?: Record<string, string>;
+    };
+    const paid = session.id === sessionId &&
+      session.mode === 'payment' &&
+      session.payment_status === 'paid' &&
+      session.currency === 'nok' &&
+      Number(session.amount_total) === PRO_PRICE_NOK &&
+      session.metadata?.product_code === 'flashmaster-pro';
+    if (!paid) return res.status(403).json({ pro: false });
+
+    res.cookie('flashmaster_pro', signedEntitlement('stripe', sessionId), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+    return res.json({ pro: true });
+  } catch (error) {
+    console.error('Stripe payment verification failed:', error);
+    return res.status(502).json({ pro: false, error: 'Could not verify payment status.' });
+  }
 });
 
 // Vipps checkout and entitlement
