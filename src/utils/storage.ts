@@ -165,33 +165,19 @@ export function saveCards(cards: Flashcard[]): void {
 }
 
 const DEFAULT_STATS: StudyStats = {
-  totalReviews: 28,
-  totalCards: 2104,
-  correctReviews: 24,
-  wrongReviews: 4,
-  streakDays: 5,
-  lastActiveDate: new Date().toISOString().split('T')[0],
-  retentionRate: 86,
-  timeSpentMinutes: 45,
-  dailyReviews: {
-    [new Date(Date.now() - 86400000 * 4).toISOString().split('T')[0]]: 5,
-    [new Date(Date.now() - 86400000 * 3).toISOString().split('T')[0]]: 8,
-    [new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0]]: 6,
-    [new Date(Date.now() - 86400000 * 1).toISOString().split('T')[0]]: 7,
-    [new Date().toISOString().split('T')[0]]: 2,
-  },
-  categoryStats: {
-    'Akuttmedisin': { total: 10, correct: 9, wrong: 1 },
-    'Kardiologi': { total: 8, correct: 7, wrong: 1 },
-    'Farmakologi': { total: 6, correct: 5, wrong: 1 },
-    'Nevrologi & Traume': { total: 4, correct: 3, wrong: 1 },
-  },
-  weakTopics: [
-    { topic: 'Glasgow Coma Scale (GCS)', wrongCount: 2, category: 'Nevrologi & Traume' },
-    { topic: 'Formel for volum og infusjonshastighet', wrongCount: 1, category: 'Legemiddelregning' },
-  ],
+  totalReviews: 0,
+  totalCards: MASTERBANK_CARDS.length,
+  correctReviews: 0,
+  wrongReviews: 0,
+  streakDays: 0,
+  lastActiveDate: '',
+  retentionRate: 0,
+  timeSpentMinutes: 0,
+  dailyReviews: {},
+  categoryStats: {},
+  weakTopics: [],
   history: [],
-};
+}
 
 export function loadStats(): StudyStats {
   if (memoryStats) {
