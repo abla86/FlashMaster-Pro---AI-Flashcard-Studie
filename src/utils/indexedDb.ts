@@ -161,3 +161,22 @@ export async function idbLoadStats(): Promise<StudyStats | null> {
     return null;
   }
 }
+
+/**
+ * Removes all app-owned IndexedDB records. This is logical deletion, not a
+ * guarantee of forensic erasure from the browser's storage medium.
+ */
+export async function idbClearAll(): Promise<void> {
+  const db = await openDb();
+  const storeNames = Object.values(STORES);
+  const tx = db.transaction(storeNames, 'readwrite');
+  for (const name of storeNames) {
+    tx.objectStore(name).clear();
+  }
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB clear transaction aborted'));
+  });
+  db.close();
+}
