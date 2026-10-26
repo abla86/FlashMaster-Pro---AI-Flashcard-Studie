@@ -15,24 +15,27 @@ interface PrivacyShieldModalProps {
   isOfflineOnly: boolean;
   onToggleOffline: (enabled: boolean) => void;
   onClose: () => void;
-  onResetData: () => void;
+  onPurgeData: () => void;
 }
 
 export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
   isOfflineOnly,
   onToggleOffline,
   onClose,
-  onResetData,
+  onPurgeData,
 }) => {
-  const handlePurge = () => {
+  const handlePurge = async () => {
     if (
       window.confirm(
-        'Er du helt sikker på at du vil slette all lokal data? Dette sletter alle kortsett, kort og statistikk fra nettleseren din permanent.'
+        'Slette egendefinerte kort, kortsett, statistikk og lokalt importert innhold fra appens nettleserlagring? Den innebygde masterbanken blir ikke slettet. Dette er logisk sletting, ikke garantert sikker overskriving av lagringsmediet.'
       )
     ) {
-      purgeAllDataSecurely();
-      onResetData();
-      onClose();
+      void purgeAllDataSecurely().then(() => {
+        onPurgeData();
+        onClose();
+      }).catch(() => {
+        window.alert('Kunne ikke slette alle lokale data. Prøv igjen, og kontroller nettleserens lagringstillatelser.');
+      });
     }
   };
 
@@ -47,7 +50,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
               Personvern & Sikkerhetsskjold
             </h2>
             <p className="text-sm text-slate-400 mt-1">
-              Garantert beskyttelse mot informasjonslekkasje, datainnbrudd og sporing
+              Informasjon om lokal lagring, nettverksbruk og begrensninger
             </p>
           </div>
 
@@ -64,10 +67,10 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
           <div className="space-y-1">
             <div className="text-base font-bold text-white flex items-center gap-2">
               <WifiOff className="w-5 h-5 text-indigo-400" />
-              100% Frakoblet Sikkerhetsmodus (Offline Only)
+              Lokal studiepreferanse
             </div>
             <p className="text-xs text-slate-400 leading-relaxed max-w-md">
-              Når aktivert, blokkeres all ekstern nettverkstrafikk. Alle Excel-filer, PDF-er og kort analyseres utelukkende lokalt i nettleseren din.
+              Dette valget kan styre støttede AI-funksjoner i appen, men er ikke en nettverksbrannmur og blokkerer ikke all trafikk. Tilgangskontroll og enkelte funksjoner kan kontakte serveren. For reell frakobling må enheten være uten nettverk.
             </p>
           </div>
 
@@ -95,7 +98,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
                 Lokal lagring i nettleseren
               </div>
               <p className="text-slate-400 leading-relaxed">
-                Kortsettene dine lagres i din lokale nettleser (LocalStorage / IndexedDB). Ingen tredjeparter har tilgang.
+                Kortsett og statistikk lagres i nettleserens LocalStorage/IndexedDB. Dataene er ikke kryptert av appen; skript med samme opprinnelse og tilgang til nettleserprofilen kan potensielt lese dem.
               </p>
             </div>
 
@@ -105,7 +108,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
                 Sanitering mot kodeinjeksjon
               </div>
               <p className="text-slate-400 leading-relaxed">
-                Alle importerte Excel- og Word-dokumenter vaskes automatisk for ondsinnet JavaScript eller formler (anti-XSS).
+                Importen parser støttede filformater og enkelte felt valideres. Dette er ikke en fullstendig malware-skanner eller garanti mot XSS, farlige formler eller skadelige dokumenter.
               </p>
             </div>
 
@@ -115,7 +118,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
                 Null sporing eller telemetri
               </div>
               <p className="text-slate-400 leading-relaxed">
-                Ingen analyseverktøy, informasjonskapsler eller eksterne sporingspiksler er installert.
+                Appen er ikke ment å bruke analyseverktøy eller sporingspiksler. Nettleserutvidelser, hosting, betaling og eksterne AI-tjenester kan likevel behandle tekniske data; kontroller nettverkskall og leverandørvilkår for den aktuelle utrullingen.
               </p>
             </div>
 
@@ -125,7 +128,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
                 Kryptert TLS-transport
               </div>
               <p className="text-slate-400 leading-relaxed">
-                Når AI-funksjoner benyttes, skjer all kommunikasjon med API-et over krypterte server-til-server kanaler.
+                Transportbeskyttelse avhenger av HTTPS/TLS i den konkrete utrullingen. Kontroller at appen og API-et bruker HTTPS før du sender data.
               </p>
             </div>
           </div>
@@ -139,7 +142,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
             className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-rose-950/30 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
-            Sikker sletting av alle data
+            Slett egendefinerte lokale data
           </button>
 
           <button
