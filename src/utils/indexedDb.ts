@@ -1,6 +1,6 @@
-// IndexedDB Storage Engine for FlashForge Pro
-// Solves localStorage 5MB quota exhaustion for 2104, 2604, and 10,000+ cards
-// 100% offline, zero external dependencies, robust and fast.
+// IndexedDB persistence for local FlashMaster study data.
+// Browser storage is local to the profile but is not encrypted by this application.
+// Network activity may still occur for access checks, payment and AI-backed features.
 
 import { Deck, Flashcard, StudyStats, StudyContentItem } from '../types/flashcard';
 
