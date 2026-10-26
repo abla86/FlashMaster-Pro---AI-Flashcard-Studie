@@ -22,8 +22,12 @@ const APP_URL = process.env.APP_URL || 'https://flashmaster-pro-sxg7.onrender.co
 const PRO_PRICE_NOK = 79900;
 const ENTITLEMENT_SECRET = process.env.ENTITLEMENT_SECRET || process.env.AUTH_SESSION_SECRET;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
 const stripePaidSessions = new Map<string, number>();
 
+function hasStripeConfig() {
+  return Boolean(STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET && ENTITLEMENT_SECRET);
+}
 function hasVippsConfig() {
   return Boolean(VIPPS_CLIENT_ID && VIPPS_CLIENT_SECRET && VIPPS_SUBSCRIPTION_KEY && VIPPS_MSN && ENTITLEMENT_SECRET);
 }
@@ -134,11 +138,52 @@ if (apiKey) {
   });
 }
 
+// Create a server-side Stripe Checkout Session with fixed product metadata and price.
+app.get('/api/stripe/create-payment', async (_req: Request, res: Response) => {
+  try {
+    if (!hasStripeConfig()) {
+      return res.status(503).json({ error: 'Stripe payment is not configured on the server.' });
+    }
+    const params = new URLSearchParams({
+      mode: 'payment',
+      success_url: `${APP_URL}/purchase-complete?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}/sales?payment=cancelled`,
+      'line_items[0][price_data][currency]': 'nok',
+      'line_items[0][price_data][unit_amount]': String(PRO_PRICE_NOK),
+      'line_items[0][price_data][product_data][name]': 'FlashMaster Pro',
+      'line_items[0][price_data][product_data][description]': 'Flashcard studio and included masterbank',
+      'line_items[0][quantity]': '1',
+      'metadata[product_code]': 'flashmaster-pro',
+      'payment_intent_data[metadata][product_code]': 'flashmaster-pro',
+    });
+    const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params,
+    });
+    const session = await response.json() as { id?: string; url?: string; error?: { message?: string } };
+    if (!response.ok || !session.url || !session.id) {
+      console.error('Stripe Checkout session creation failed:', response.status);
+      return res.status(502).json({ error: 'Could not start card payment.' });
+    }
+    return res.redirect(303, session.url);
+  } catch (error) {
+    console.error('Stripe Checkout creation error:', error);
+    return res.status(502).json({ error: 'Could not start card payment.' });
+  }
+});
+
 // Public sales page
 app.get('/sales', (_req: Request, res: Response) => {
-  const stripePaymentUrl = process.env.PAYMENT_URL || 'https://buy.stripe.com/5kQ14maom48ffWUfKL8og01';
+  const stripeButton = hasStripeConfig() ? '<a class="buy" href="/api/stripe/create-payment">Kjøp med kort</a>' : '';
   const vippsButton = hasVippsConfig() ? '<a class="buy secondary" href="/api/vipps/create-payment">Kjøp med Vipps</a>' : '';
-  res.type('html').send(`<!doctype html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FlashMaster Pro — 2104 flashcards</title><style>body{margin:0;background:#070b14;color:#f8fafc;font:16px system-ui,sans-serif}.wrap{max-width:900px;margin:auto;padding:70px 24px}.hero{padding:40px;border:1px solid #263247;border-radius:28px;background:linear-gradient(135deg,#111827,#0b1220)}h1{font-size:48px;line-height:1.05;margin:12px 0}p{color:#aab5c7;line-height:1.7}.price{font-size:38px;font-weight:900;margin:28px 0}.buy{display:inline-block;padding:16px 26px;border-radius:14px;background:#6366f1;color:white;text-decoration:none;font-weight:900;margin:4px}.buy.secondary{background:#334155}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:25px}.card{padding:20px;border:1px solid #263247;border-radius:18px;background:#0d1422}.small{font-size:13px;color:#718096;margin-top:28px}</style></head><body><main class="wrap"><section class="hero"><div>FLASHMASTER PRO</div><h1>2104 flashcards + ditt eget flashcard-studio.</h1><p>Studer smartere med ferdig masterbank, spaced repetition, egne kortsett og import fra PDF, Word, Excel, CSV og tekst. Eksporter til Anki og Quizlet.</p><div class="price">799 kr</div><a class="buy" href="${stripePaymentUrl}">Kjøp med kort</a>${vippsButton}<div class="grid"><div class="card"><b>2104 kort</b><p>Ferdig masterbank inkludert.</p></div><div class="card"><b>Lag selv</b><p>Opprett egne kort og kortsett.</p></div><div class="card"><b>Importer</b><p>PDF, Word, Excel, CSV og tekst.</p></div><div class="card"><b>Studer</b><p>Spaced repetition og statistikk.</p></div></div><p class="small">Digitalt produkt. Ikke medisinsk rådgivning. Kjøp gir tilgang til FlashMaster Pro-produktet som beskrevet på salgssiden.</p></section></main></body></html>`);
+  const paymentUnavailable = !hasStripeConfig() && !hasVippsConfig()
+    ? '<p class="small">Betaling er ikke tilgjengelig akkurat nå. Ingen betaling kan gjennomføres før betalingsoppsettet er aktivert.</p>'
+    : '';
+  res.type('html').send(`<!doctype html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FlashMaster Pro — 2104 flashcards</title><style>body{margin:0;background:#070b14;color:#f8fafc;font:16px system-ui,sans-serif}.wrap{max-width:900px;margin:auto;padding:70px 24px}.hero{padding:40px;border:1px solid #263247;border-radius:28px;background:linear-gradient(135deg,#111827,#0b1220)}h1{font-size:48px;line-height:1.05;margin:12px 0}p{color:#aab5c7;line-height:1.7}.price{font-size:38px;font-weight:900;margin:28px 0}.buy{display:inline-block;padding:16px 26px;border-radius:14px;background:#6366f1;color:white;text-decoration:none;font-weight:900;margin:4px}.buy.secondary{background:#334155}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:25px}.card{padding:20px;border:1px solid #263247;border-radius:18px;background:#0d1422}.small{font-size:13px;color:#718096;margin-top:28px}</style></head><body><main class="wrap"><section class="hero"><div>FLASHMASTER PRO</div><h1>2104 flashcards + ditt eget flashcard-studio.</h1><p>Studer smartere med ferdig masterbank, spaced repetition, egne kortsett og import fra PDF, Word, Excel, CSV og tekst. Eksporter til Anki og Quizlet.</p><div class="price">799 kr</div>${stripeButton}${vippsButton}${paymentUnavailable}<div class="grid"><div class="card"><b>2104 kort</b><p>Ferdig masterbank inkludert.</p></div><div class="card"><b>Lag selv</b><p>Opprett egne kort og kortsett.</p></div><div class="card"><b>Importer</b><p>PDF, Word, Excel, CSV og tekst.</p></div><div class="card"><b>Studer</b><p>Spaced repetition og statistikk.</p></div></div><p class="small">Digitalt produkt. Ikke medisinsk rådgivning. Kjøp gir tilgang til FlashMaster Pro-produktet som beskrevet på salgssiden.</p></section></main></body></html>`);
 });
 
 // Health check endpoint
@@ -225,7 +270,7 @@ app.get('/api/vipps/status', async (req: Request, res: Response) => {
 
 app.get('/api/pro/status', (req: Request, res: Response) => {
   const reference = verifyEntitlement(req.headers.cookie?.match(/(?:^|; )flashmaster_pro=([^;]+)/)?.[1]);
-  res.json({ pro: Boolean(reference), configured: hasVippsConfig() });
+  res.json({ pro: Boolean(reference), configured: hasVippsConfig() || hasStripeConfig(), vippsConfigured: hasVippsConfig(), stripeConfigured: hasStripeConfig() });
 });
 
 app.get('/purchase-complete', (req: Request, res: Response) => {
