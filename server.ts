@@ -23,7 +23,6 @@ const PRO_PRICE_NOK = 79900;
 const ENTITLEMENT_SECRET = process.env.ENTITLEMENT_SECRET || process.env.AUTH_SESSION_SECRET;
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const stripePaidSessions = new Map<string, number>();
 
 function hasStripeConfig() {
   return Boolean(STRIPE_SECRET_KEY && STRIPE_WEBHOOK_SECRET && ENTITLEMENT_SECRET);
@@ -100,19 +99,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), (req:
     const valid = signatures.some((candidate: string) => candidate.length === expected.length && require('node:crypto').timingSafeEqual(Buffer.from(candidate), Buffer.from(expected)));
     if (!valid) return res.status(400).send('Invalid Stripe signature');
     const event = JSON.parse(rawBody.toString('utf8'));
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data?.object;
-      if (
-        session?.payment_status === 'paid' &&
-        session?.mode === 'payment' &&
-        session?.currency === 'nok' &&
-        Number(session?.amount_total) === PRO_PRICE_NOK &&
-        session?.metadata?.product_code === 'flashmaster-pro' &&
-        typeof session?.id === 'string'
-      ) {
-        stripePaidSessions.set(session.id, Date.now() + 24 * 60 * 60 * 1000);
-      }
-    }
+    // Payment status is verified against Stripe's API when the buyer returns.
     return res.sendStatus(204);
   } catch (error) {
     console.error('Stripe webhook error:', error);
