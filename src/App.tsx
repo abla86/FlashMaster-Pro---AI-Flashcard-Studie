@@ -244,12 +244,32 @@ export default function App() {
     setOfflineShieldSetting(enabled);
   };
 
-  // Reset all to sample data
+  // Reset to the bundled starter content (used by Settings).
   const handleResetData = () => {
     resetAllDataToDefault();
     setDecks(loadDecks());
     setCards(loadCards());
     setStats(loadStats());
+  };
+
+  // Reflect a successful local-storage purge without writing defaults back to storage.
+  const handlePurgeData = () => {
+    setDecks([]);
+    setCards([]);
+    setStats({
+      totalReviews: 0,
+      totalCards: 0,
+      correctReviews: 0,
+      wrongReviews: 0,
+      streakDays: 0,
+      lastActiveDate: '',
+      retentionRate: 0,
+      timeSpentMinutes: 0,
+      dailyReviews: {},
+      categoryStats: {},
+      weakTopics: [],
+      history: [],
+    });
   };
 
   // Filter cards for the gallery
@@ -663,7 +683,7 @@ export default function App() {
           isOfflineOnly={isOfflineOnly}
           onToggleOffline={handleToggleOffline}
           onClose={() => setIsPrivacyOpen(false)}
-          onResetData={handleResetData}
+          onPurgeData={handlePurgeData}
         />
       )}
 
