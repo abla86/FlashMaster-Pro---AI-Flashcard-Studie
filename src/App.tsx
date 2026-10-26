@@ -76,6 +76,7 @@ export default function App() {
   const [visibleCardCount, setVisibleCardCount] = useState(60);
   const [proStatus, setProStatus] = useState<'loading' | 'active' | 'locked'>('loading');
   const [vippsAvailable, setVippsAvailable] = useState(false);
+  const [stripeAvailable, setStripeAvailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +112,7 @@ export default function App() {
         const data = await response.json();
         if (!cancelled) {
           setVippsAvailable(Boolean(data.vippsConfigured));
+          setStripeAvailable(Boolean(data.stripeConfigured));
           setProStatus(data.pro ? 'active' : 'locked');
         }
       } catch {
@@ -119,6 +121,24 @@ export default function App() {
     };
     check();
     return () => { cancelled = true; };
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    let active = true;
+
+    const hydrate = async () => {
+      const loaded = await hydrateFromIndexedDb();
+      if (!active) return;
+      setDecks(loaded.decks);
+      setCards(loaded.cards);
+      setStats(loaded.stats);
+    };
+
+    hydrate();
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Privacy & Offline
@@ -151,31 +171,18 @@ export default function App() {
           <h1 className="text-4xl sm:text-5xl font-black">2104 flashcards + ditt eget flashcard-studio</h1>
           <p className="text-slate-300 leading-7">Få tilgang til masterbanken, egne kort og kortsett, import fra PDF/Word/Excel/CSV/tekst, spaced repetition og eksport til Anki/Quizlet.</p>
           <div className="text-4xl font-black">799 kr</div>
-          <a href="/api/vipps/create-payment" className="inline-flex px-7 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black">Kjøp med Vipps</a>
-          <p className="text-xs text-slate-500">Etter godkjent betaling aktiveres Pro automatisk.</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {stripeAvailable && <a href="/api/stripe/create-payment" className="inline-flex px-7 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black">Kjøp med kort</a>}
+            {vippsAvailable && <a href="/api/vipps/create-payment" className="inline-flex px-7 py-4 rounded-2xl bg-slate-700 hover:bg-slate-600 text-white font-black">Kjøp med Vipps</a>}
+          </div>
+          {!stripeAvailable && !vippsAvailable
+            ? <p className="text-xs text-amber-300">Betaling er ikke konfigurert akkurat nå. Du kan lese produktinformasjonen, men kan ikke kjøpe her.</p>
+            : <p className="text-xs text-slate-500">Tilgang aktiveres etter at serveren har bekreftet fullført betaling.</p>}
           <a href="/sales" className="block text-sm text-slate-400 hover:text-white">Se full produktinformasjon</a>
         </div>
       </div>
     );
   }
-
-  // Initial load
-  useEffect(() => {
-    let active = true;
-
-    const hydrate = async () => {
-      const loaded = await hydrateFromIndexedDb();
-      if (!active) return;
-      setDecks(loaded.decks);
-      setCards(loaded.cards);
-      setStats(loaded.stats);
-    };
-
-    hydrate();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   // Update HTML class for dark mode
   useEffect(() => {
