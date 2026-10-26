@@ -353,7 +353,7 @@ export function resetAllDataToDefault(): void {
 }
 
 // Clear app-owned browser storage. This is logical deletion, not forensic erasure.
-export async function purgeAllDataSecurely(): Promise<void> {
+export async function clearLocalAppData(): Promise<void> {
   memoryCards = [];
   memoryDecks = [];
   memoryStats = null;
