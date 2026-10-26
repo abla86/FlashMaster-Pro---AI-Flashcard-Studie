@@ -47,7 +47,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
               <ShieldCheck className="w-6 h-6 text-emerald-400" />
-              Personvern & Sikkerhetsskjold
+              Personvern og databehandling
             </h2>
             <p className="text-sm text-slate-400 mt-1">
               Informasjon om lokal lagring, nettverksbruk og begrensninger
@@ -88,7 +88,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
         {/* Security Pillars */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Sikkerhetsarkitektur
+            Databehandling og begrensninger
           </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -105,7 +105,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
             <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
               <div className="font-semibold text-slate-200 flex items-center gap-1.5">
                 <FileCheck className="w-4 h-4 text-sky-400" />
-                Sanitering mot kodeinjeksjon
+                Importvalidering (begrenset)
               </div>
               <p className="text-slate-400 leading-relaxed">
                 Importen parser støttede filformater og enkelte felt valideres. Dette er ikke en fullstendig malware-skanner eller garanti mot XSS, farlige formler eller skadelige dokumenter.
@@ -115,7 +115,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
             <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
               <div className="font-semibold text-slate-200 flex items-center gap-1.5">
                 <EyeOff className="w-4 h-4 text-purple-400" />
-                Null sporing eller telemetri
+                Sporing og tekniske data
               </div>
               <p className="text-slate-400 leading-relaxed">
                 Appen er ikke ment å bruke analyseverktøy eller sporingspiksler. Nettleserutvidelser, hosting, betaling og eksterne AI-tjenester kan likevel behandle tekniske data; kontroller nettverkskall og leverandørvilkår for den aktuelle utrullingen.
@@ -125,7 +125,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
             <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
               <div className="font-semibold text-slate-200 flex items-center gap-1.5">
                 <Lock className="w-4 h-4 text-amber-400" />
-                Kryptert TLS-transport
+                Transportbeskyttelse (avhengig av utrulling)
               </div>
               <p className="text-slate-400 leading-relaxed">
                 Transportbeskyttelse avhenger av HTTPS/TLS i den konkrete utrullingen. Kontroller at appen og API-et bruker HTTPS før du sender data.
