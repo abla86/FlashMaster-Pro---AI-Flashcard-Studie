@@ -5,7 +5,7 @@ https://buy.stripe.com/5kQ14maom48ffWUfKL8og01
 
 **Produkt:** https://flashmaster-pro-sxg7.onrender.com/sales
 
-**Betalingsoppsett:** Automatisk tilgang krever gyldig Stripe/Vipps-konfigurasjon på serveren. Vipps-webhook må ha delt hemmelighet konfigurert både hos Vipps og i `VIPPS_WEBHOOK_SECRET`.
+**Betalingsoppsett:** Checkout er deaktivert til selgerens juridiske navn, postadresse, organisasjonsnummer og kontaktadresse er konfigurert (`SELLER_*`). Stripe krever server-side `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` og `ENTITLEMENT_SECRET`. Vipps krever API-credentials, `VIPPS_WEBHOOK_SECRET` og `ENTITLEMENT_SECRET`. Vipps-webhook må sende `Authorization: Bearer <VIPPS_WEBHOOK_SECRET>`. Se også `/terms`, `/privacy` og `/withdrawal` på live-applikasjonen.
 
 AI-assisted flashcard and study application for creating, importing, studying, reviewing and exporting structured learning material.
 
