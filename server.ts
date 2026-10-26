@@ -278,7 +278,7 @@ app.get('/api/vipps/create-payment', async (_req: Request, res: Response) => {
     });
     const data = await response.json();
     if (!response.ok) return res.status(response.status).json({ error: data });
-    res.cookie('flashmaster_pending', signedEntitlement('vipps', reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 15 * 60 * 1000, path: '/' });
+    res.cookie('flashmaster_pending', signedEntitlement('vipps', reference), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 15 * 60 * 1000, path: '/' });
     return res.redirect(data.redirectUrl);
   } catch (error: any) {
     console.error('Vipps create payment error:', error);
@@ -297,7 +297,7 @@ app.get('/api/vipps/status', async (req: Request, res: Response) => {
     if (!response.ok) return res.status(response.status).json({ pro: false, error: data });
     const captured = Number(data?.aggregate?.capturedAmount?.value || 0) >= PRO_PRICE_NOK;
     if (captured) {
-      res.cookie('flashmaster_pro', signedEntitlement('vipps', reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
+      res.cookie('flashmaster_pro', signedEntitlement('vipps', reference), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
       return res.json({ pro: true, state: data.state, reference });
     }
     if (data.state === 'AUTHORIZED' && Number(data?.aggregate?.authorizedAmount?.value || 0) >= PRO_PRICE_NOK) {
@@ -307,7 +307,7 @@ app.get('/api/vipps/status', async (req: Request, res: Response) => {
         body: JSON.stringify({ modificationAmount: { currency: 'NOK', value: PRO_PRICE_NOK } }),
       });
       if (capture.ok || capture.status === 409) {
-        res.cookie('flashmaster_pro', signedEntitlement(reference), { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
+        res.cookie('flashmaster_pro', signedEntitlement('vipps', reference), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000, path: '/' });
         return res.json({ pro: true, state: 'CAPTURED', reference });
       }
     }
