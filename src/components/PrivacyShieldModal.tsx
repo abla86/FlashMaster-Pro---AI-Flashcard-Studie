@@ -27,7 +27,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
   const handlePurge = async () => {
     if (
       window.confirm(
-        'Slette egendefinerte kort, kortsett, statistikk og lokalt importert innhold fra appens nettleserlagring? Den innebygde masterbanken blir ikke slettet. Dette er logisk sletting, ikke garantert sikker overskriving av lagringsmediet.'
+        'Slette appens lokale nettleserdata, inkludert egendefinerte kort/kortsett, statistikk, importert innhold og lokale preferanser for frakoblet-modus, tema og autosave? Den innebygde masterbanken i app-pakken blir ikke slettet. Dette fjerner lokale kopier fra denne nettleserprofilen, men garanterer ikke overskriving av lagringsmediet eller sletting av kopier hos andre tjenester.'
       )
     ) {
       void clearLocalAppData().then(() => {
@@ -115,6 +115,7 @@ export const PrivacyShieldModal: React.FC<PrivacyShieldModalProps> = ({
             <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
               <div className="font-semibold text-slate-200 flex items-center gap-1.5">
                 <EyeOff className="w-4 h-4 text-purple-400" />
+                Ingen innebygd analysetjeneste
                 Sporing og tekniske data
               </div>
               <p className="text-slate-400 leading-relaxed">
